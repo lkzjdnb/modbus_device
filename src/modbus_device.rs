@@ -30,11 +30,15 @@ pub enum ModBusRegisters {
 }
 
 #[derive(Debug)]
+pub struct ConversionError;
+
+#[derive(Debug)]
 pub enum ModbusError {
     Exception(Exception),
     IOerror(std::io::Error),
     ModbusError(tokio_modbus::Error),
     TryFromSliceError(TryFromSliceError),
+    ConversionError(ConversionError),
 }
 impl From<Exception> for ModbusError {
     fn from(value: Exception) -> Self {
@@ -54,6 +58,11 @@ impl From<tokio_modbus::Error> for ModbusError {
 impl From<TryFromSliceError> for ModbusError {
     fn from(value: TryFromSliceError) -> Self {
         ModbusError::TryFromSliceError(value)
+    }
+}
+impl From<ConversionError> for ModbusError {
+    fn from(value: ConversionError) -> Self {
+        ModbusError::ConversionError(value)
     }
 }
 
@@ -330,6 +339,27 @@ impl ModbusConnexion for ModbusDevice {
         let mut reg_range_end = 0;
 
         let mut result: HashMap<String, RegisterValue> = HashMap::new();
+
+        if regs.len() == 1 {
+            let reg = regs[0].clone();
+            let read_regs: Vec<u16> = match source {
+                ModBusRegisters::INPUT => self.read_raw_input_registers(reg.addr, reg.len)?,
+                ModBusRegisters::HOLDING => self.read_raw_holding_registers(reg.addr, reg.len)?,
+            };
+
+            let value: Result<(String, RegisterValue), ConversionError> =
+                match (read_regs, reg.data_type).try_into() {
+                    Ok(res) => Ok((reg.name.to_owned(), res)),
+                    Err(err) => {
+                        warn!(
+                            "There was an error converting field {0} dropping it ({err:?})",
+                            reg.name
+                        );
+                        return Err(ConversionError.into());
+                    }
+                };
+            return Ok(HashMap::from([value?]));
+        }
 
         for (mut i, r) in regs.iter().skip(1).enumerate() {
             i = i + 1;
