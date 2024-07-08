@@ -94,6 +94,7 @@ pub trait ModbusConnexion {
         &mut self,
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+    fn read_holding_register(&mut self, regs: Register) -> Result<RegisterValue, ModbusError>;
 
     fn dump_holding_registers(&mut self) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
@@ -442,6 +443,12 @@ impl ModbusConnexion for ModbusDevice {
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
         self.read_register(regs, ModBusRegisters::HOLDING)
+    }
+    fn read_holding_register(&mut self, reg: Register) -> Result<RegisterValue, ModbusError> {
+        match self.read_register(vec![reg.clone()], ModBusRegisters::HOLDING) {
+            Ok(val) => Ok(*val.get(&reg.name).unwrap()),
+            Err(err) => Err(err),
+        }
     }
 
     fn dump_holding_registers(&mut self) -> Result<HashMap<String, RegisterValue>, ModbusError> {
