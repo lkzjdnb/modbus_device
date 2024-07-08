@@ -157,6 +157,12 @@ impl Into<register::DataType> for DataType {
     }
 }
 
+impl From<f32> for RegisterValue {
+    fn from(value: f32) -> Self {
+        RegisterValue::Float32(value)
+    }
+}
+
 impl TryFrom<(Vec<u16>, register::DataType)> for RegisterValue {
     fn try_from((raw, kind): (Vec<u16>, register::DataType)) -> Result<Self, Self::Error> {
         let raw_b: Vec<u8> = raw
@@ -223,9 +229,10 @@ impl TryInto<Vec<u16>> for RegisterValue {
         bytearray
             .chunks(2)
             .map(|v| match v.try_into() {
-                Ok(arr) => Ok(u16::from_be_bytes(arr)),
+                Ok(arr) => Ok(u16::from_le_bytes(arr)),
                 Err(err) => Err(err),
             })
+            .rev()
             .collect()
     }
 }
