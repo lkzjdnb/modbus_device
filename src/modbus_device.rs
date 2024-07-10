@@ -22,6 +22,7 @@ pub struct ModbusDevice {
     pub ctx: Context,
     pub input_registers: HashMap<String, Register>,
     pub holding_registers: HashMap<String, Register>,
+    pub addr: SocketAddr,
 }
 
 pub enum ModBusRegisters {
@@ -67,6 +68,7 @@ impl From<ConversionError> for ModbusError {
 }
 
 pub trait ModbusConnexion {
+    fn connect(&mut self) -> Result<(), std::io::Error>;
     fn read_raw_input_registers(
         &mut self,
         addr: Address,
@@ -519,5 +521,10 @@ impl ModbusConnexion for ModbusDevice {
         val: RegisterValue,
     ) -> Result<(), ModbusError> {
         self.write_raw_input_registers(reg.addr, val.try_into()?)
+    }
+
+    fn connect(&mut self) -> Result<(), std::io::Error> {
+        self.ctx = connect(self.addr)?;
+        Ok(())
     }
 }
