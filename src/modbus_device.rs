@@ -18,6 +18,7 @@ use register::Register;
 // maximum number of register that can be read at once (limited by the protocol)
 const MODBUS_MAX_READ_LEN: u16 = 125;
 
+#[derive(Debug)]
 pub struct ModbusDevice {
     pub ctx: Context,
     pub input_registers: HashMap<String, Register>,
