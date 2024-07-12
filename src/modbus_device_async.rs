@@ -1,33 +1,22 @@
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::array::TryFromSliceError;
 use std::collections::HashMap;
 use std::fs::File;
 use std::net::SocketAddr;
 use tokio_modbus::{
-    client::sync::{self, Context, Reader},
-    prelude::SyncWriter,
-    Address, Exception, Quantity,
+    client::{tcp, Context},
+    prelude::Reader,
+    prelude::Writer,
+    Address, Quantity,
 };
 
-pub mod errors;
-pub mod modbus_device_async;
-pub mod register;
-pub mod types;
-
-use register::Register;
+use crate::errors::{ConversionError, DeviceNotConnectedError, ModbusError};
+use crate::register::Register;
+use crate::types::{DataType, RegisterValue};
 
 // maximum number of register that can be read at once (limited by the protocol)
 const MODBUS_MAX_READ_LEN: u16 = 125;
-
-#[derive(Debug)]
-pub struct ModbusDevice {
-    pub ctx: Context,
-    pub input_registers: HashMap<String, Register>,
-    pub holding_registers: HashMap<String, Register>,
-    pub addr: SocketAddr,
-}
 
 pub enum ModBusRegisters {
     INPUT,
@@ -35,222 +24,87 @@ pub enum ModBusRegisters {
 }
 
 #[derive(Debug)]
-pub struct ConversionError;
+pub struct ModbusDevice {
+    ctx: Option<Context>,
+    input_registers: HashMap<String, Register>,
+    holding_registers: HashMap<String, Register>,
+    addr: SocketAddr,
+}
 
-#[derive(Debug)]
-pub enum ModbusError {
-    Exception(Exception),
-    IOerror(std::io::Error),
-    ModbusError(tokio_modbus::Error),
-    TryFromSliceError(TryFromSliceError),
-    ConversionError(ConversionError),
-}
-impl From<Exception> for ModbusError {
-    fn from(value: Exception) -> Self {
-        ModbusError::Exception(value)
-    }
-}
-impl From<std::io::Error> for ModbusError {
-    fn from(value: std::io::Error) -> Self {
-        ModbusError::IOerror(value)
-    }
-}
-impl From<tokio_modbus::Error> for ModbusError {
-    fn from(value: tokio_modbus::Error) -> Self {
-        ModbusError::ModbusError(value)
-    }
-}
-impl From<TryFromSliceError> for ModbusError {
-    fn from(value: TryFromSliceError) -> Self {
-        ModbusError::TryFromSliceError(value)
-    }
-}
-impl From<ConversionError> for ModbusError {
-    fn from(value: ConversionError) -> Self {
-        ModbusError::ConversionError(value)
+impl ModbusDevice {
+    pub fn new(
+        self,
+        addr: SocketAddr,
+        input_registers: HashMap<String, Register>,
+        holding_registers: HashMap<String, Register>,
+    ) -> Self {
+        ModbusDevice {
+            ctx: None,
+            input_registers,
+            holding_registers,
+            addr,
+        }
     }
 }
 
-pub trait ModbusConnexion {
-    fn connect(&mut self) -> Result<(), std::io::Error>;
-    fn read_raw_input_registers(
+#[trait_variant::make(IntFactory: Send)]
+pub trait ModbusConnexionAsync {
+    async fn connect(&mut self) -> Result<(), std::io::Error>;
+    async fn read_raw_input_registers(
         &mut self,
         addr: Address,
         nb: Quantity,
     ) -> Result<Vec<u16>, ModbusError>;
 
-    fn read_input_registers_by_name(
+    async fn read_input_registers_by_name(
         &mut self,
         names: Vec<String>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-    fn read_input_registers(
+    async fn read_input_registers(
         &mut self,
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
-    fn read_register(
+    async fn read_register(
         &mut self,
         regs: Vec<Register>,
         source: ModBusRegisters,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
-    fn dump_input_registers(&mut self) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+    async fn dump_input_registers(&mut self)
+        -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
-    fn read_raw_holding_registers(
+    async fn read_raw_holding_registers(
         &mut self,
         addr: Address,
         nb: Quantity,
     ) -> Result<Vec<u16>, ModbusError>;
-    fn read_holding_registers_by_name(
+    async fn read_holding_registers_by_name(
         &mut self,
         names: Vec<String>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-    fn read_holding_registers(
+    async fn read_holding_registers(
         &mut self,
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-    fn read_holding_register(&mut self, regs: Register) -> Result<RegisterValue, ModbusError>;
+    async fn read_holding_register(&mut self, regs: Register)
+        -> Result<RegisterValue, ModbusError>;
 
-    fn dump_holding_registers(&mut self) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+    async fn dump_holding_registers(
+        &mut self,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
     fn get_holding_register_by_name(&mut self, name: String) -> Option<&Register>;
-    fn write_raw_input_registers(
+    async fn write_raw_input_registers(
         &mut self,
         addr: Address,
         data: Vec<u16>,
     ) -> Result<(), ModbusError>;
-    fn write_holding_register(
+    async fn write_holding_register(
         &mut self,
         reg: Register,
         val: RegisterValue,
     ) -> Result<(), ModbusError>;
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum RegisterValue {
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    S32(i32),
-    Enum16(u16),
-    Sized([u8; 66]),
-    Float32(f32),
-    Boolean(bool),
-}
-
-#[derive(Serialize, Deserialize)]
-enum DataType {
-    #[serde(alias = "Uint16")]
-    UInt16,
-    #[serde(alias = "Uint32")]
-    UInt32,
-    UInt64,
-    UInt128,
-    Int32,
-    Enum16,
-    #[serde(rename = "Sized+Uint16[31]")]
-    Sized,
-    #[serde(rename = "IEEE-754 float32")]
-    Float32,
-    #[serde(rename = "boolean")]
-    Boolean,
-}
-
-impl Into<register::DataType> for DataType {
-    fn into(self) -> register::DataType {
-        match self {
-            Self::UInt16 => register::DataType::UInt16,
-            Self::UInt32 => register::DataType::UInt32,
-            Self::UInt64 => register::DataType::UInt64,
-            Self::UInt128 => register::DataType::UInt128,
-            Self::Int32 => register::DataType::Int32,
-            Self::Enum16 => register::DataType::Enum16,
-            Self::Sized => register::DataType::Sized,
-            Self::Float32 => register::DataType::Float32,
-            Self::Boolean => register::DataType::Boolean,
-        }
-    }
-}
-
-impl From<f32> for RegisterValue {
-    fn from(value: f32) -> Self {
-        RegisterValue::Float32(value)
-    }
-}
-
-impl TryFrom<(Vec<u16>, register::DataType)> for RegisterValue {
-    fn try_from((raw, kind): (Vec<u16>, register::DataType)) -> Result<Self, Self::Error> {
-        let raw_b: Vec<u8> = raw
-            .iter()
-            .map(|v| v.to_be_bytes())
-            .flatten()
-            .rev()
-            .collect();
-        match kind {
-            register::DataType::UInt16 => Ok(RegisterValue::U16(raw[0])),
-            register::DataType::UInt32 => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::U32(u32::from_le_bytes(res))),
-                Err(err) => Err(err),
-            },
-            register::DataType::UInt64 => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::U64(u64::from_le_bytes(res))),
-                Err(err) => Err(err),
-            },
-            register::DataType::UInt128 => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::U128(u128::from_le_bytes(res))),
-                Err(err) => Err(err),
-            },
-            register::DataType::Int32 => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::S32(i32::from_le_bytes(res))),
-                Err(err) => Err(err),
-            },
-            register::DataType::Enum16 => Ok(RegisterValue::Enum16(raw[0])),
-            register::DataType::Sized => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::Sized(res)),
-                Err(err) => Err(err),
-            },
-            register::DataType::Float32 => match raw_b.try_into() {
-                Ok(res) => Ok(RegisterValue::Float32(f32::from_le_bytes(res))),
-                Err(err) => Err(err),
-            },
-            register::DataType::Boolean => Ok(RegisterValue::Boolean(!raw[0] == 0)),
-        }
-    }
-
-    type Error = Vec<u8>;
-}
-
-impl TryInto<Vec<u16>> for RegisterValue {
-    type Error = TryFromSliceError;
-
-    fn try_into(self) -> Result<Vec<u16>, Self::Error> {
-        let bytearray = match self {
-            RegisterValue::U16(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::U32(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::U64(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::U128(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::S32(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::Enum16(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::Sized(val) => val.to_vec(),
-            RegisterValue::Float32(val) => val.to_le_bytes().to_vec(),
-            RegisterValue::Boolean(val) => match val {
-                true => 1 as u16,
-                false => 0,
-            }
-            .to_le_bytes()
-            .to_vec(),
-        };
-
-        bytearray
-            .chunks(2)
-            .map(|v| match v.try_into() {
-                Ok(arr) => Ok(u16::from_le_bytes(arr)),
-                Err(err) => Err(err),
-            })
-            .rev()
-            .collect()
-    }
 }
 
 fn return_true() -> bool {
@@ -293,19 +147,23 @@ pub fn get_defs_from_json(input: File) -> Result<HashMap<String, Register>, serd
     return Ok(m);
 }
 
-pub fn connect(addr: SocketAddr) -> Result<Context, std::io::Error> {
-    sync::tcp::connect(addr)
-}
-
-impl ModbusConnexion for ModbusDevice {
+impl ModbusConnexionAsync for ModbusDevice {
     // read input registers by address
-    fn read_raw_input_registers(
+    async fn read_raw_input_registers(
         &mut self,
         addr: Address,
         nb: Quantity,
     ) -> Result<Vec<u16>, ModbusError> {
         debug!("read register {addr} x{nb}");
-        let res = self.ctx.read_input_registers(addr, nb);
+        if self.ctx.is_none() {
+            return Err(DeviceNotConnectedError.into());
+        }
+        let res = self
+            .ctx
+            .as_mut()
+            .unwrap()
+            .read_input_registers(addr, nb)
+            .await;
         match res {
             Ok(res) => match res {
                 Ok(res) => return Ok(res),
@@ -315,7 +173,7 @@ impl ModbusConnexion for ModbusDevice {
         }
     }
 
-    fn read_input_registers_by_name(
+    async fn read_input_registers_by_name(
         &mut self,
         names: Vec<String>,
     ) -> Result<HashMap<std::string::String, RegisterValue>, ModbusError> {
@@ -329,10 +187,10 @@ impl ModbusConnexion for ModbusDevice {
                 }
             })
             .collect();
-        self.read_input_registers(registers_to_read)
+        self.read_input_registers(registers_to_read).await
     }
 
-    fn read_register(
+    async fn read_register(
         &mut self,
         mut regs: Vec<Register>,
         source: ModBusRegisters,
@@ -349,8 +207,10 @@ impl ModbusConnexion for ModbusDevice {
         if regs.len() == 1 {
             let reg = regs[0].clone();
             let read_regs: Vec<u16> = match source {
-                ModBusRegisters::INPUT => self.read_raw_input_registers(reg.addr, reg.len)?,
-                ModBusRegisters::HOLDING => self.read_raw_holding_registers(reg.addr, reg.len)?,
+                ModBusRegisters::INPUT => self.read_raw_input_registers(reg.addr, reg.len).await?,
+                ModBusRegisters::HOLDING => {
+                    self.read_raw_holding_registers(reg.addr, reg.len).await?
+                }
             };
 
             let value: Result<(String, RegisterValue), ConversionError> =
@@ -384,14 +244,20 @@ impl ModbusConnexion for ModbusDevice {
                     e_reg.addr + e_reg.len - s_reg.addr
                 );
                 let read_regs: Vec<u16> = match source {
-                    ModBusRegisters::INPUT => self.read_raw_input_registers(
-                        s_reg.addr,
-                        e_reg.addr + e_reg.len - s_reg.addr,
-                    )?,
-                    ModBusRegisters::HOLDING => self.read_raw_holding_registers(
-                        s_reg.addr,
-                        e_reg.addr + e_reg.len - s_reg.addr,
-                    )?,
+                    ModBusRegisters::INPUT => {
+                        self.read_raw_input_registers(
+                            s_reg.addr,
+                            e_reg.addr + e_reg.len - s_reg.addr,
+                        )
+                        .await?
+                    }
+                    ModBusRegisters::HOLDING => {
+                        self.read_raw_holding_registers(
+                            s_reg.addr,
+                            e_reg.addr + e_reg.len - s_reg.addr,
+                        )
+                        .await?
+                    }
                 };
 
                 // convert them to the types and make the association with the registers
@@ -427,28 +293,36 @@ impl ModbusConnexion for ModbusDevice {
         return Ok(result);
     }
 
-    fn read_input_registers(
+    async fn read_input_registers(
         &mut self,
         regs: Vec<Register>,
     ) -> Result<HashMap<std::string::String, RegisterValue>, ModbusError> {
-        self.read_register(regs, ModBusRegisters::INPUT)
+        self.read_register(regs, ModBusRegisters::INPUT).await
     }
 
-    fn dump_input_registers(
+    async fn dump_input_registers(
         &mut self,
     ) -> Result<HashMap<std::string::String, RegisterValue>, ModbusError> {
         let registers = self.input_registers.to_owned();
         let keys: Vec<String> = registers.into_keys().collect();
-        self.read_input_registers_by_name(keys)
+        self.read_input_registers_by_name(keys).await
     }
 
-    fn read_raw_holding_registers(
+    async fn read_raw_holding_registers(
         &mut self,
         addr: Address,
         nb: Quantity,
     ) -> Result<Vec<u16>, ModbusError> {
         debug!("read register {addr} x{nb}");
-        let res = self.ctx.read_holding_registers(addr, nb);
+        if self.ctx.is_none() {
+            return Err(DeviceNotConnectedError.into());
+        }
+        let res = self
+            .ctx
+            .as_mut()
+            .unwrap()
+            .read_holding_registers(addr, nb)
+            .await;
         match res {
             Ok(res) => match res {
                 Ok(res) => return Ok(res),
@@ -458,7 +332,7 @@ impl ModbusConnexion for ModbusDevice {
         }
     }
 
-    fn read_holding_registers_by_name(
+    async fn read_holding_registers_by_name(
         &mut self,
         names: Vec<String>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
@@ -472,22 +346,27 @@ impl ModbusConnexion for ModbusDevice {
                 }
             })
             .collect();
-        self.read_holding_registers(registers_to_read)
+        self.read_holding_registers(registers_to_read).await
     }
-    fn read_holding_registers(
+    async fn read_holding_registers(
         &mut self,
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
-        self.read_register(regs, ModBusRegisters::HOLDING)
+        self.read_register(regs, ModBusRegisters::HOLDING).await
     }
-    fn read_holding_register(&mut self, reg: Register) -> Result<RegisterValue, ModbusError> {
-        match self.read_register(vec![reg.clone()], ModBusRegisters::HOLDING) {
+    async fn read_holding_register(&mut self, reg: Register) -> Result<RegisterValue, ModbusError> {
+        match self
+            .read_register(vec![reg.clone()], ModBusRegisters::HOLDING)
+            .await
+        {
             Ok(val) => Ok(*val.get(&reg.name).unwrap()),
             Err(err) => Err(err),
         }
     }
 
-    fn dump_holding_registers(&mut self) -> Result<HashMap<String, RegisterValue>, ModbusError> {
+    async fn dump_holding_registers(
+        &mut self,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
         let registers = self.holding_registers.to_owned();
 
         let keys: Vec<String> = registers
@@ -497,19 +376,27 @@ impl ModbusConnexion for ModbusDevice {
                 false => None,
             })
             .collect();
-        self.read_holding_registers_by_name(keys)
+        self.read_holding_registers_by_name(keys).await
     }
 
     fn get_holding_register_by_name(&mut self, name: String) -> Option<&Register> {
         self.holding_registers.get(&name)
     }
 
-    fn write_raw_input_registers(
+    async fn write_raw_input_registers(
         &mut self,
         addr: Address,
         data: Vec<u16>,
     ) -> Result<(), ModbusError> {
-        let res = self.ctx.write_multiple_registers(addr, &data);
+        if self.ctx.is_none() {
+            return Err(DeviceNotConnectedError.into());
+        }
+        let res = self
+            .ctx
+            .as_mut()
+            .unwrap()
+            .write_multiple_registers(addr, &data)
+            .await;
         match res {
             Ok(res) => match res {
                 Ok(res) => return Ok(res),
@@ -519,16 +406,17 @@ impl ModbusConnexion for ModbusDevice {
         }
     }
 
-    fn write_holding_register(
+    async fn write_holding_register(
         &mut self,
         reg: Register,
         val: RegisterValue,
     ) -> Result<(), ModbusError> {
         self.write_raw_input_registers(reg.addr, val.try_into()?)
+            .await
     }
 
-    fn connect(&mut self) -> Result<(), std::io::Error> {
-        self.ctx = connect(self.addr)?;
+    async fn connect(&mut self) -> Result<(), std::io::Error> {
+        self.ctx = Some(tcp::connect(self.addr).await?);
         Ok(())
     }
 }
