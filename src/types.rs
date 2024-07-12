@@ -3,6 +3,11 @@ use std::array::TryFromSliceError;
 use crate::register;
 use serde::{Deserialize, Serialize};
 
+pub enum ModBusRegisters {
+    INPUT,
+    HOLDING,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum RegisterValue {
     U16(u16),

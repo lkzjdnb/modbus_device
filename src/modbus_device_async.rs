@@ -1,8 +1,5 @@
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
-use std::fs::File;
 use std::net::SocketAddr;
 use tokio_modbus::{
     client::{tcp, Context},
@@ -11,34 +8,31 @@ use tokio_modbus::{
     Address, Quantity,
 };
 
-use crate::errors::{ConversionError, DeviceNotConnectedError, ModbusError};
 use crate::register::Register;
-use crate::types::{DataType, RegisterValue};
+use crate::types::RegisterValue;
+use crate::{
+    errors::{ConversionError, DeviceNotConnectedError, ModbusError},
+    types::ModBusRegisters,
+};
 
 // maximum number of register that can be read at once (limited by the protocol)
 const MODBUS_MAX_READ_LEN: u16 = 125;
 
-pub enum ModBusRegisters {
-    INPUT,
-    HOLDING,
-}
-
 #[derive(Debug)]
-pub struct ModbusDevice {
+pub struct ModbusDeviceAsync {
     ctx: Option<Context>,
     input_registers: HashMap<String, Register>,
     holding_registers: HashMap<String, Register>,
     addr: SocketAddr,
 }
 
-impl ModbusDevice {
+impl ModbusDeviceAsync {
     pub fn new(
-        self,
         addr: SocketAddr,
         input_registers: HashMap<String, Register>,
         holding_registers: HashMap<String, Register>,
     ) -> Self {
-        ModbusDevice {
+        ModbusDeviceAsync {
             ctx: None,
             input_registers,
             holding_registers,
@@ -47,7 +41,7 @@ impl ModbusDevice {
     }
 }
 
-#[trait_variant::make(IntFactory: Send)]
+#[trait_variant::make(ModbusFactory: Send)]
 pub trait ModbusConnexionAsync {
     async fn connect(&mut self) -> Result<(), std::io::Error>;
     async fn read_raw_input_registers(
@@ -95,7 +89,7 @@ pub trait ModbusConnexionAsync {
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
     fn get_holding_register_by_name(&mut self, name: String) -> Option<&Register>;
-    async fn write_raw_input_registers(
+    async fn write_raw_holding_registers(
         &mut self,
         addr: Address,
         data: Vec<u16>,
@@ -107,47 +101,7 @@ pub trait ModbusConnexionAsync {
     ) -> Result<(), ModbusError>;
 }
 
-fn return_true() -> bool {
-    true
-}
-
-#[derive(Serialize, Deserialize)]
-struct RawRegister {
-    id: u16,
-    name: String,
-    #[serde(rename = "type")]
-    type_: DataType,
-    len: u16,
-    #[serde(default = "return_true")]
-    read: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RegistersFormat {
-    metaid: String,
-    result: String,
-    registers: Vec<RawRegister>,
-}
-
-pub fn get_defs_from_json(input: File) -> Result<HashMap<String, Register>, serde_json::Error> {
-    let raw: RegistersFormat = serde_json::from_reader(input)?;
-    let mut m = HashMap::<String, Register>::new();
-    for f in raw.registers {
-        m.insert(
-            f.name.clone(),
-            Register {
-                name: f.name,
-                addr: f.id,
-                len: f.len / 16,
-                data_type: f.type_.into(),
-                read: f.read,
-            },
-        );
-    }
-    return Ok(m);
-}
-
-impl ModbusConnexionAsync for ModbusDevice {
+impl ModbusConnexionAsync for ModbusDeviceAsync {
     // read input registers by address
     async fn read_raw_input_registers(
         &mut self,
@@ -383,7 +337,7 @@ impl ModbusConnexionAsync for ModbusDevice {
         self.holding_registers.get(&name)
     }
 
-    async fn write_raw_input_registers(
+    async fn write_raw_holding_registers(
         &mut self,
         addr: Address,
         data: Vec<u16>,
@@ -411,7 +365,7 @@ impl ModbusConnexionAsync for ModbusDevice {
         reg: Register,
         val: RegisterValue,
     ) -> Result<(), ModbusError> {
-        self.write_raw_input_registers(reg.addr, val.try_into()?)
+        self.write_raw_holding_registers(reg.addr, val.try_into()?)
             .await
     }
 

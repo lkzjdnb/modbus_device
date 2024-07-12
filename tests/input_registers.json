@@ -1,0 +1,60 @@
+{
+  "metaid": "ModbusJson",
+  "result": "OK",
+  "registers": [
+    {
+      "id": 0,
+      "name": "reg1",
+      "type": "UInt16",
+      "len": 16
+    },
+    {
+      "id": 2,
+      "name": "reg2",
+      "type": "UInt32",
+      "len": 32
+    },
+    {
+      "id": 10,
+      "name": "reg3",
+      "type": "UInt64",
+      "len": 64
+    },
+    {
+      "id": 14,
+      "name": "reg4",
+      "type": "UInt128",
+      "len": 128
+    },
+    {
+      "id": 22,
+      "name": "reg5",
+      "type": "Enum16",
+      "len": 16
+    },
+    {
+      "id": 24,
+      "name": "reg6",
+      "type": "Sized+Uint16[31]",
+      "len": 528
+    },
+    {
+      "id": 1000,
+      "name": "reg7",
+      "type": "IEEE-754 float32",
+      "len": 32
+    },
+    {
+      "id": 4000,
+      "name": "reg8",
+      "type": "boolean",
+      "len": 16
+    },
+    {
+      "id": 4002,
+      "name": "reg9",
+      "type": "Int32",
+      "len": 32
+    }
+  ]
+}
