@@ -6,8 +6,8 @@ use tokio_modbus::{
     Address, Quantity, Slave,
 };
 
-use tokio_serial;
 use tokio_serial::SerialStream;
+use tokio_serial::{self, StopBits};
 
 use crate::register::Register;
 use crate::types::RegisterValue;
@@ -376,10 +376,14 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
                 self.ctx = Some(tcp::connect(ctx.addr).await?);
             }
             ModBusContext::RTU(ctx) => {
-                let builder = tokio_serial::new(ctx.port.clone(), ctx.speed);
+                let builder = tokio_serial::new(ctx.port.clone(), ctx.speed)
+                    .stop_bits(StopBits::Two)
+                    .parity(tokio_serial::Parity::None)
+                    .data_bits(tokio_serial::DataBits::Eight);
                 let port = SerialStream::open(&builder).unwrap();
 
                 self.ctx = Some(rtu::attach_slave(port, ctx.slave));
+                debug!("Connected to devices {0:?}", self.ctx);
             }
         }
         Ok(())
