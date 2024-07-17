@@ -4,6 +4,7 @@ use crate::register;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::Slave;
 
+#[derive(Debug, Clone)]
 pub enum ModBusRegisters {
     INPUT,
     HOLDING,

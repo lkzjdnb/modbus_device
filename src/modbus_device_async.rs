@@ -1,5 +1,5 @@
 use log::{debug, warn};
-use std::collections::HashMap;
+use std::{collections::HashMap, io::IoSliceMut};
 use tokio_modbus::{
     client::{rtu, tcp, Context},
     prelude::{Reader, Writer},
@@ -60,6 +60,11 @@ pub trait ModbusConnexionAsync {
         regs: Vec<Register>,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
+    async fn read_range(
+        &mut self,
+        regs: Vec<Register>,
+        source: ModBusRegisters,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
     async fn read_register(
         &mut self,
         regs: Vec<Register>,
@@ -145,6 +150,51 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         self.read_input_registers(registers_to_read).await
     }
 
+    async fn read_range(
+        &mut self,
+        regs: Vec<Register>,
+        source: ModBusRegisters,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
+        let s_reg = regs.first().unwrap();
+        let e_reg = regs.last().unwrap();
+        // Read the values
+        debug!(
+            "reading range {0}:{1}",
+            s_reg.addr,
+            e_reg.addr + e_reg.len - s_reg.addr
+        );
+        let read_regs: Vec<u16> = match source {
+            ModBusRegisters::INPUT => {
+                self.read_raw_input_registers(s_reg.addr, e_reg.addr + e_reg.len - s_reg.addr)
+                    .await?
+            }
+            ModBusRegisters::HOLDING => {
+                self.read_raw_holding_registers(s_reg.addr, e_reg.addr + e_reg.len - s_reg.addr)
+                    .await?
+            }
+        };
+
+        // convert them to the types and make the association with the registers
+        Ok(regs
+            .iter()
+            .filter_map(|v| {
+                let start_off = v.addr - s_reg.addr;
+                let value: Vec<u16> =
+                    read_regs[start_off.into()..(start_off + v.len).into()].to_vec();
+                match (value, v.data_type).try_into() {
+                    Ok(res) => Some((v.name.to_owned(), res)),
+                    Err(err) => {
+                        warn!(
+                            "There was an error converting field {0} dropping it ({err:?})",
+                            v.name
+                        );
+                        None
+                    }
+                }
+            })
+            .collect())
+    }
+
     async fn read_register(
         &mut self,
         mut regs: Vec<Register>,
@@ -162,25 +212,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         if regs.len() == 1 {
             debug!("There is only one register to read");
             let reg = regs[0].clone();
-            let read_regs: Vec<u16> = match source {
-                ModBusRegisters::INPUT => self.read_raw_input_registers(reg.addr, reg.len).await?,
-                ModBusRegisters::HOLDING => {
-                    self.read_raw_holding_registers(reg.addr, reg.len).await?
-                }
-            };
-
-            let value: Result<(String, RegisterValue), ConversionError> =
-                match (read_regs, reg.data_type).try_into() {
-                    Ok(res) => Ok((reg.name.to_owned(), res)),
-                    Err(err) => {
-                        warn!(
-                            "There was an error converting field {0} dropping it ({err:?})",
-                            reg.name
-                        );
-                        return Err(ConversionError.into());
-                    }
-                };
-            return Ok(HashMap::from([value?]));
+            return Ok(self.read_range(vec![reg], source).await?);
         }
 
         for (mut i, r) in regs.iter().skip(1).enumerate() {
@@ -188,62 +220,29 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             // if the range is greater than the max request size we read this batch
             if r.addr - regs[reg_range_start].addr > MODBUS_MAX_READ_LEN
                 || r.addr != regs[reg_range_end].addr + regs[reg_range_end].len
-                || i == regs.len() - 1
             {
-                let s_reg = &regs[reg_range_start];
-                let e_reg = &r;
-
-                // Read the values
-                debug!(
-                    "reading range {0}:{1}",
-                    s_reg.addr,
-                    e_reg.addr + e_reg.len - s_reg.addr
-                );
-                let read_regs: Vec<u16> = match source {
-                    ModBusRegisters::INPUT => {
-                        self.read_raw_input_registers(
-                            s_reg.addr,
-                            e_reg.addr + e_reg.len - s_reg.addr,
-                        )
-                        .await?
-                    }
-                    ModBusRegisters::HOLDING => {
-                        self.read_raw_holding_registers(
-                            s_reg.addr,
-                            e_reg.addr + e_reg.len - s_reg.addr,
-                        )
-                        .await?
-                    }
-                };
-
-                // convert them to the types and make the association with the registers
-                let read_regs_map: HashMap<String, RegisterValue> = regs[reg_range_start..i + 1]
-                    .iter()
-                    .filter_map(|v| {
-                        let start_off = v.addr - s_reg.addr;
-                        let value: Vec<u16> =
-                            read_regs[start_off.into()..(start_off + v.len).into()].to_vec();
-                        match (value, v.data_type).try_into() {
-                            Ok(res) => Some((v.name.to_owned(), res)),
-                            Err(err) => {
-                                warn!(
-                                    "There was an error converting field {0} dropping it ({err:?})",
-                                    v.name
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .collect();
-
+                let read_regs_map = self
+                    .read_range(
+                        regs[reg_range_start..reg_range_end + 1].to_vec(),
+                        source.clone(),
+                    )
+                    .await?;
                 // merge it with the result
                 result.extend(read_regs_map);
 
                 // reset range
-                reg_range_start = i + 1;
+                reg_range_start = i;
             }
             reg_range_end = i;
         }
+        // read the last batch
+        let read_regs_map = self
+            .read_range(
+                regs[reg_range_start..reg_range_end + 1].to_vec(),
+                source.clone(),
+            )
+            .await?;
+        result.extend(read_regs_map);
 
         return Ok(result);
     }
