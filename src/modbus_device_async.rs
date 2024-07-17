@@ -160,6 +160,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         let mut result: HashMap<String, RegisterValue> = HashMap::new();
 
         if regs.len() == 1 {
+            debug!("There is only one register to read");
             let reg = regs[0].clone();
             let read_regs: Vec<u16> = match source {
                 ModBusRegisters::INPUT => self.read_raw_input_registers(reg.addr, reg.len).await?,
@@ -190,7 +191,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
                 || i == regs.len() - 1
             {
                 let s_reg = &regs[reg_range_start];
-                let e_reg = &regs[reg_range_end];
+                let e_reg = &r;
 
                 // Read the values
                 debug!(
@@ -216,8 +217,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
                 };
 
                 // convert them to the types and make the association with the registers
-                let read_regs_map: HashMap<String, RegisterValue> = regs
-                    [reg_range_start..reg_range_end + 1]
+                let read_regs_map: HashMap<String, RegisterValue> = regs[reg_range_start..i + 1]
                     .iter()
                     .filter_map(|v| {
                         let start_off = v.addr - s_reg.addr;
@@ -240,7 +240,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
                 result.extend(read_regs_map);
 
                 // reset range
-                reg_range_start = i;
+                reg_range_start = i + 1;
             }
             reg_range_end = i;
         }
