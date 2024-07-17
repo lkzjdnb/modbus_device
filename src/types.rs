@@ -1,11 +1,40 @@
-use std::array::TryFromSliceError;
+use std::{array::TryFromSliceError, net::SocketAddr};
 
 use crate::register;
 use serde::{Deserialize, Serialize};
+use tokio_modbus::Slave;
 
 pub enum ModBusRegisters {
     INPUT,
     HOLDING,
+}
+
+#[derive(Debug)]
+pub struct TCPContext {
+    pub addr: SocketAddr,
+}
+#[derive(Debug)]
+pub struct RTUContext {
+    pub port: String,
+    pub slave: Slave,
+    pub speed: u32,
+}
+
+#[derive(Debug)]
+pub enum ModBusContext {
+    TCP(TCPContext),
+    RTU(RTUContext),
+}
+
+impl Into<ModBusContext> for TCPContext {
+    fn into(self) -> ModBusContext {
+        ModBusContext::TCP(self)
+    }
+}
+impl Into<ModBusContext> for RTUContext {
+    fn into(self) -> ModBusContext {
+        ModBusContext::RTU(self)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

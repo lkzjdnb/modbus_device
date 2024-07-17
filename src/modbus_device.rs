@@ -11,7 +11,7 @@ pub mod utils;
 use errors::ModbusError;
 use modbus_device_async::{ModbusConnexionAsync, ModbusDeviceAsync};
 use register::Register;
-use types::{ModBusRegisters, RegisterValue};
+use types::{ModBusContext, ModBusRegisters, RegisterValue};
 
 pub struct ModbusDevice {
     device: ModbusDeviceAsync,
@@ -75,12 +75,12 @@ pub trait ModbusConnexion {
 
 impl ModbusDevice {
     pub fn new(
-        addr: SocketAddr,
+        context: ModBusContext,
         input_registers: HashMap<String, Register>,
         holding_registers: HashMap<String, Register>,
     ) -> Self {
         ModbusDevice {
-            device: ModbusDeviceAsync::new(addr, input_registers, holding_registers),
+            device: ModbusDeviceAsync::new(context, input_registers, holding_registers),
             runtime: runtime::Runtime::new().unwrap(),
         }
     }

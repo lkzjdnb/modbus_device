@@ -1,18 +1,19 @@
 use log::{debug, warn};
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use tokio_modbus::{
-    client::{tcp, Context},
-    prelude::Reader,
-    prelude::Writer,
-    Address, Quantity,
+    client::{rtu, tcp, Context},
+    prelude::{Reader, Writer},
+    Address, Quantity, Slave,
 };
+
+use tokio_serial;
+use tokio_serial::SerialStream;
 
 use crate::register::Register;
 use crate::types::RegisterValue;
 use crate::{
     errors::{ConversionError, DeviceNotConnectedError, ModbusError},
-    types::ModBusRegisters,
+    types::{ModBusContext, ModBusRegisters},
 };
 
 // maximum number of register that can be read at once (limited by the protocol)
@@ -23,12 +24,12 @@ pub struct ModbusDeviceAsync {
     ctx: Option<Context>,
     input_registers: HashMap<String, Register>,
     holding_registers: HashMap<String, Register>,
-    addr: SocketAddr,
+    device: ModBusContext,
 }
 
 impl ModbusDeviceAsync {
     pub fn new(
-        addr: SocketAddr,
+        context: ModBusContext,
         input_registers: HashMap<String, Register>,
         holding_registers: HashMap<String, Register>,
     ) -> Self {
@@ -36,7 +37,7 @@ impl ModbusDeviceAsync {
             ctx: None,
             input_registers,
             holding_registers,
-            addr,
+            device: context,
         }
     }
 }
@@ -370,7 +371,17 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
     }
 
     async fn connect(&mut self) -> Result<(), std::io::Error> {
-        self.ctx = Some(tcp::connect(self.addr).await?);
+        match &self.device {
+            ModBusContext::TCP(ctx) => {
+                self.ctx = Some(tcp::connect(ctx.addr).await?);
+            }
+            ModBusContext::RTU(ctx) => {
+                let builder = tokio_serial::new(ctx.port.clone(), ctx.speed);
+                let port = SerialStream::open(&builder).unwrap();
+
+                self.ctx = Some(rtu::attach_slave(port, ctx.slave));
+            }
+        }
         Ok(())
     }
 }
