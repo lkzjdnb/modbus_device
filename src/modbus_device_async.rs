@@ -209,6 +209,10 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
 
         let mut result: HashMap<String, RegisterValue> = HashMap::new();
 
+        if regs.len() == 0 {
+            debug!("There is no register to read");
+            return Ok(HashMap::new());
+        }
         if regs.len() == 1 {
             debug!("There is only one register to read");
             let reg = regs[0].clone();
