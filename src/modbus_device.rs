@@ -1,15 +1,16 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 use tokio::runtime;
 use tokio_modbus::{Address, Quantity};
 
 pub mod errors;
+pub mod industrial_device;
 pub mod modbus_device_async;
 pub mod register;
 pub mod types;
 pub mod utils;
 
 use errors::ModbusError;
-use modbus_device_async::{ModbusConnexionAsync, ModbusDeviceAsync};
+use modbus_device_async::{LocalModbusConnexionAsync, ModbusDeviceAsync};
 use register::Register;
 use types::{ModBusContext, ModBusRegisters, RegisterValue};
 

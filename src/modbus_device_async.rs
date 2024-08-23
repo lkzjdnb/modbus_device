@@ -1,9 +1,9 @@
 use log::{debug, warn};
-use std::{collections::HashMap, io::IoSliceMut};
+use std::collections::HashMap;
 use tokio_modbus::{
     client::{rtu, tcp, Context},
     prelude::{Reader, Writer},
-    Address, Quantity, Slave,
+    Address, Quantity,
 };
 
 use tokio_serial::SerialStream;
@@ -12,7 +12,7 @@ use tokio_serial::{self, StopBits};
 use crate::register::Register;
 use crate::types::RegisterValue;
 use crate::{
-    errors::{ConversionError, DeviceNotConnectedError, ModbusError},
+    errors::{DeviceNotConnectedError, ModbusError},
     types::{ModBusContext, ModBusRegisters},
 };
 
@@ -42,8 +42,8 @@ impl ModbusDeviceAsync {
     }
 }
 
-#[trait_variant::make(ModbusFactory: Send)]
-pub trait ModbusConnexionAsync {
+#[trait_variant::make(ModbusConnexionAsync: Send)]
+pub trait LocalModbusConnexionAsync {
     async fn connect(&mut self) -> Result<(), std::io::Error>;
     async fn read_raw_input_registers(
         &mut self,
@@ -107,7 +107,7 @@ pub trait ModbusConnexionAsync {
     ) -> Result<(), ModbusError>;
 }
 
-impl ModbusConnexionAsync for ModbusDeviceAsync {
+impl LocalModbusConnexionAsync for ModbusDeviceAsync {
     // read input registers by address
     async fn read_raw_input_registers(
         &mut self,
@@ -213,6 +213,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             debug!("There is no register to read");
             return Ok(HashMap::new());
         }
+        // TODO: check if we can remove that
         if regs.len() == 1 {
             debug!("There is only one register to read");
             let reg = regs[0].clone();
