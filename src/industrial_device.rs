@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
-use crate::modbus_device_async::{LocalModbusConnexionAsync, ModbusDeviceAsync};
+use crate::modbus_connexion_async::ModbusConnexionAsync;
+use crate::modbus_device_async::ModbusDeviceAsync;
 
 use industrial_device::types::Value;
 use industrial_device::IndustrialDevice;
 
 impl IndustrialDevice for ModbusDeviceAsync {
     async fn connect(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
-        match LocalModbusConnexionAsync::connect(self).await {
+        match ModbusConnexionAsync::connect(self).await {
             Ok(_) => Ok(()),
             Err(err) => Err(Box::new(err)),
         }
