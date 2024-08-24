@@ -12,7 +12,7 @@ use tokio_serial::{self, StopBits};
 use crate::register::Register;
 use crate::types::RegisterValue;
 use crate::{
-    errors::{DeviceNotConnectedError, ModbusError},
+    errors::ModbusError,
     types::{ModBusContext, ModBusRegisters},
 };
 
@@ -53,7 +53,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
     ) -> Result<Vec<u16>, ModbusError> {
         debug!("read register {addr} x{nb}");
         if self.ctx.is_none() {
-            return Err(DeviceNotConnectedError.into());
+            return Err(ModbusError::DeviceNotConnectedError);
         }
         let res = self
             .ctx
@@ -211,7 +211,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
     ) -> Result<Vec<u16>, ModbusError> {
         debug!("read register {addr} x{nb}");
         if self.ctx.is_none() {
-            return Err(DeviceNotConnectedError.into());
+            return Err(ModbusError::DeviceNotConnectedError);
         }
         let res = self
             .ctx
@@ -285,7 +285,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         data: Vec<u16>,
     ) -> Result<(), ModbusError> {
         if self.ctx.is_none() {
-            return Err(DeviceNotConnectedError.into());
+            return Err(ModbusError::DeviceNotConnectedError);
         }
         let res = self
             .ctx
@@ -311,7 +311,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             .await
     }
 
-    async fn connect(&mut self) -> Result<(), std::io::Error> {
+    async fn connect(&mut self) -> Result<(), ModbusError> {
         match &self.device {
             ModBusContext::TCP(ctx) => {
                 self.ctx = Some(tcp::connect(ctx.addr).await?);

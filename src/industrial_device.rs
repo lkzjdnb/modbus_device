@@ -1,24 +1,49 @@
 use std::collections::HashMap;
 
+use crate::errors::ModbusError;
 use crate::modbus_connexion_async::ModbusConnexionAsync;
 use crate::modbus_device_async::ModbusDeviceAsync;
 use crate::types::RegisterValue;
 
+use industrial_device::errors::IndustrialDeviceError;
 use industrial_device::types::Value;
 use industrial_device::IndustrialDevice;
 
 impl IndustrialDevice for ModbusDeviceAsync {
-    async fn connect(&mut self) -> Result<(), Box<dyn std::error::Error + Send>> {
-        match ModbusConnexionAsync::connect(self).await {
-            Ok(_) => Ok(()),
-            Err(err) => Err(Box::new(err)),
-        }
+    async fn connect(&mut self) -> Result<(), IndustrialDeviceError> {
+        ModbusConnexionAsync::connect(self).await?;
+        Ok(())
     }
 
-    async fn dump_registers(
-        &mut self,
-    ) -> Result<HashMap<String, Value>, Box<dyn std::error::Error + Send>> {
+    async fn dump_registers(&mut self) -> Result<HashMap<String, Value>, IndustrialDeviceError> {
         todo!()
+    }
+}
+
+impl From<ModbusError> for IndustrialDeviceError {
+    fn from(value: ModbusError) -> Self {
+        match value {
+            ModbusError::Exception { err } => {
+                IndustrialDeviceError::RequestError { err: Box::new(err) }
+            }
+            ModbusError::ModbusError { err } => {
+                IndustrialDeviceError::RequestError { err: Box::new(err) }
+            }
+            ModbusError::IOerror { err } => {
+                IndustrialDeviceError::DeviceNotAccessibleError { err: Box::new(err) }
+            }
+            ModbusError::TryFromSliceError { err } => {
+                IndustrialDeviceError::ConversionError { err: Box::new(err) }
+            }
+            ModbusError::ConversionError => IndustrialDeviceError::ConversionError {
+                err: Box::new(value),
+            },
+            ModbusError::DeviceNotConnectedError => {
+                IndustrialDeviceError::DeviceNotConnectedError {
+                    err: Box::new(value),
+                }
+            }
+        }
     }
 }
 

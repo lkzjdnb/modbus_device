@@ -10,7 +10,7 @@ use crate::{
 
 #[trait_variant::make(ModbusConnexionAsync: Send)]
 pub trait LocalModbusConnexionAsync {
-    async fn connect(&mut self) -> Result<(), std::io::Error>;
+    async fn connect(&mut self) -> Result<(), ModbusError>;
     async fn read_raw_input_registers(
         &mut self,
         addr: Address,

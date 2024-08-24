@@ -22,7 +22,7 @@ pub struct ModbusDevice {
 }
 
 pub trait ModbusConnexion {
-    fn connect(&mut self) -> Result<(), std::io::Error>;
+    fn connect(&mut self) -> Result<(), ModbusError>;
     fn read_raw_input_registers(
         &mut self,
         addr: Address,
@@ -185,7 +185,7 @@ impl ModbusConnexion for ModbusDevice {
             .block_on(self.device.write_holding_register(reg, val))
     }
 
-    fn connect(&mut self) -> Result<(), std::io::Error> {
+    fn connect(&mut self) -> Result<(), ModbusError> {
         self.runtime.block_on(self.device.connect())
     }
 }
