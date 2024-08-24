@@ -26,9 +26,15 @@ impl From<ModbusError> for IndustrialDeviceError {
             ModbusError::Exception { err } => {
                 IndustrialDeviceError::RequestError { err: Box::new(err) }
             }
-            ModbusError::ModbusError { err } => {
-                IndustrialDeviceError::RequestError { err: Box::new(err) }
-            }
+            ModbusError::ModbusError { err } => match err {
+                tokio_modbus::Error::Transport(err) => match err.kind() {
+                    std::io::ErrorKind::BrokenPipe => {
+                        IndustrialDeviceError::DeviceNotAccessibleError { err: Box::new(err) }
+                    }
+                    _ => IndustrialDeviceError::RequestError { err: Box::new(err) },
+                },
+                _ => IndustrialDeviceError::RequestError { err: Box::new(err) },
+            },
             ModbusError::IOerror { err } => {
                 IndustrialDeviceError::DeviceNotAccessibleError { err: Box::new(err) }
             }
