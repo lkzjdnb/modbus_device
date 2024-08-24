@@ -16,7 +16,21 @@ impl IndustrialDevice for ModbusDeviceAsync {
     }
 
     async fn dump_registers(&mut self) -> Result<HashMap<String, Value>, IndustrialDeviceError> {
-        todo!()
+        let input: HashMap<String, RegisterValue> = self.dump_input_registers().await?;
+        let holding: HashMap<String, RegisterValue> = self.dump_holding_registers().await?;
+
+        let input_conv: HashMap<String, Value> = input
+            .iter()
+            .map(|(name, val)| (name.clone(), Into::<Value>::into(*val)))
+            .collect();
+        let holding_conv: HashMap<String, Value> = holding
+            .iter()
+            .map(|(name, val)| (name.clone(), Into::<Value>::into(*val)))
+            .collect();
+
+        let mut res = input_conv;
+        res.extend(holding_conv);
+        Ok(res)
     }
 }
 
