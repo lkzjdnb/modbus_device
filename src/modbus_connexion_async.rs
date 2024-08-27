@@ -11,64 +11,84 @@ use crate::{
 #[trait_variant::make(ModbusConnexionAsync: Send)]
 pub trait LocalModbusConnexionAsync {
     async fn connect(&mut self) -> Result<(), ModbusError>;
-    async fn read_raw_input_registers(
+
+    // Lower level utils
+    async fn read_raw_registers(
         &mut self,
-        addr: Address,
-        nb: Quantity,
+        addr: &Address,
+        nb: &Quantity,
+        source: &ModBusRegisters,
     ) -> Result<Vec<u16>, ModbusError>;
-
-    async fn read_input_registers_by_name(
+    async fn write_raw_holding_registers(
         &mut self,
-        names: Vec<String>,
-    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-    async fn read_input_registers(
-        &mut self,
-        regs: Vec<Register>,
-    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-
+        addr: &Address,
+        data: &[u16],
+    ) -> Result<(), ModbusError>;
     async fn read_range(
         &mut self,
-        regs: Vec<Register>,
-        source: ModBusRegisters,
+        regs: &[Register],
+        source: &ModBusRegisters,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+
+    // Global access
+    async fn read_registers(
+        &mut self,
+        regs: &[Register],
+        source: &ModBusRegisters,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
     async fn read_register(
         &mut self,
-        regs: Vec<Register>,
-        source: ModBusRegisters,
+        reg: &Register,
+        source: &ModBusRegisters,
+    ) -> Result<RegisterValue, ModbusError>;
+    async fn read_registers_by_name(
+        &mut self,
+        names: &[String],
+        source: &ModBusRegisters,
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+    async fn dump_registers(
+        &mut self,
+        source: &ModBusRegisters,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
+    // Input register specific wrappers
+    async fn read_input_registers_by_name(
+        &mut self,
+        names: &[String],
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
+    async fn read_input_registers(
+        &mut self,
+        regs: &[Register],
+    ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
     async fn dump_input_registers(&mut self)
         -> Result<HashMap<String, RegisterValue>, ModbusError>;
 
-    async fn read_raw_holding_registers(
-        &mut self,
-        addr: Address,
-        nb: Quantity,
-    ) -> Result<Vec<u16>, ModbusError>;
+    // Holding register specific wrappers
     async fn read_holding_registers_by_name(
         &mut self,
-        names: Vec<String>,
+        names: &[String],
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
     async fn read_holding_registers(
         &mut self,
-        regs: Vec<Register>,
+        regs: &[Register],
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-    async fn read_holding_register(&mut self, regs: Register)
+    async fn read_holding_register(&mut self, reg: &Register)
         -> Result<RegisterValue, ModbusError>;
-
     async fn dump_holding_registers(
         &mut self,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError>;
-
-    fn get_holding_register_by_name(&mut self, name: String) -> Option<&Register>;
-    async fn write_raw_holding_registers(
-        &mut self,
-        addr: Address,
-        data: Vec<u16>,
-    ) -> Result<(), ModbusError>;
     async fn write_holding_register(
         &mut self,
-        reg: Register,
-        val: RegisterValue,
+        reg: &Register,
+        val: &RegisterValue,
     ) -> Result<(), ModbusError>;
+    async fn write_holding_register_by_name(
+        &mut self,
+        name: &str,
+        val: &RegisterValue,
+    ) -> Result<(), ModbusError>;
+
+    // Registers access utils
+    fn get_holding_register_by_name(&mut self, name: &str) -> Option<Register>;
+    fn get_input_register_by_name(&mut self, name: &str) -> Option<Register>;
 }

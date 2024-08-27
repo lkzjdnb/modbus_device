@@ -10,6 +10,7 @@ custom_error! {pub ModbusError
     TryFromSliceError {err: TryFromSliceError} = "Try from slice error : {err}",
     ConversionError = "Conversion error",
     DeviceNotConnectedError = "Device is not connected",
+    RegisterDoesNotExistError{ name: String } = "Register {name} was not found",
 }
 
 impl From<Exception> for ModbusError {
