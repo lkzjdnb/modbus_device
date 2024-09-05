@@ -11,6 +11,8 @@ use industrial_device::types::Value;
 use industrial_device::IndustrialDevice;
 use log::warn;
 
+use async_trait::async_trait;
+
 fn get_register_by_name(
     dev: &mut ModbusDeviceAsync,
     name: &str,
@@ -31,6 +33,7 @@ fn get_register_by_name(
     }
 }
 
+#[async_trait]
 impl IndustrialDevice for ModbusDeviceAsync {
     async fn connect(&mut self) -> Result<(), IndustrialDeviceError> {
         ModbusConnexionAsync::connect(self).await?;
