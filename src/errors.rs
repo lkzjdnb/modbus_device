@@ -3,7 +3,11 @@ use custom_error::custom_error;
 use std::array::TryFromSliceError;
 use tokio_modbus::Exception;
 
-custom_error! {pub ModbusError
+custom_error! {
+/// Defining a custom error enum called `ModbusError` using
+/// the `custom_error` macro. The enum `ModbusError` has several variants that represent
+/// different error cases that can occur in a Modbus communication scenario
+    pub ModbusError
     Exception{ err: Exception} = "Modbus exception : {err}",
     IOerror {err: std::io::Error} = "IOError : {err}",
     ModbusError {err: tokio_modbus::Error} = "Modbus error : {err}",

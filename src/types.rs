@@ -5,16 +5,39 @@ use serde::{Deserialize, Serialize};
 use tokio_modbus::Slave;
 
 #[derive(Debug, Clone)]
+/// The `ModBusRegisters` enum defines two variants of register: `INPUT` and `HOLDING`.
 pub enum ModBusRegisters {
     INPUT,
     HOLDING,
 }
 
+
 #[derive(Debug)]
+/// The `TCPContext` struct represents a context for TCP connections with an associated socket address.
+/// 
+/// Properties:
+/// 
+/// * `addr`: The `addr` property represents the socket address of the TCP
+/// connection. It typically includes the IP address of the remote endpoint.
 pub struct TCPContext {
     pub addr: SocketAddr,
 }
 #[derive(Debug)]
+/// The `RTUContext` struct represents a context for a Modbus RTU connection with port, slave address,
+/// and speed information.
+/// 
+/// Properties:
+/// 
+/// * `port`: the communication port that will
+/// be used for the Modbus RTU communication. It specifies the
+/// physical or virtual port through which the Modbus RTU communication will take place, such as "COM
+/// 
+/// * `slave`: It likely represents
+/// the slave device that the RTU communication protocol will be interacting with.
+/// 
+/// * `speed`: The `speed` property represents the communication speed in
+/// bits per second for the Modbus RTU protocol. It specifies how fast data is transmitted between the
+/// master and slave devices over the serial port.
 pub struct RTUContext {
     pub port: String,
     pub slave: Slave,
@@ -22,6 +45,7 @@ pub struct RTUContext {
 }
 
 #[derive(Debug)]
+/// The `ModBusContext` enum is defining two variants: `TCP` and `RTU`.
 pub enum ModBusContext {
     TCP(TCPContext),
     RTU(RTUContext),

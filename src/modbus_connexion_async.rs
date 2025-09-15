@@ -9,6 +9,8 @@ use crate::{
 };
 
 #[trait_variant::make(ModbusConnexionAsync: Send)]
+/// That represents an asynchronous
+/// interface for interacting with a Modbus connection.
 pub trait LocalModbusConnexionAsync {
     async fn connect(&mut self) -> Result<(), ModbusError>;
 

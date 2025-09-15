@@ -13,6 +13,20 @@ use log::warn;
 
 use async_trait::async_trait;
 
+/// The function `get_register_by_name` in Rust retrieves a register by name from a Modbus device,
+/// handling different cases based on the register type.
+/// 
+/// Arguments:
+/// 
+/// * `dev`: The `dev` parameter is a mutable reference to a `ModbusDeviceAsync` object, which is used
+/// to interact with a Modbus device asynchronously.
+/// * `name`: The `name` parameter is a string that represents
+/// the name of the register you are looking for in the Modbus device.
+/// 
+/// Returns:
+/// 
+/// The function `get_register_by_name` returns a `Result` containing a tuple with a `Register` and the type of register
+/// `ModBusRegisters` enum, or an `IndustrialDeviceError` in case of a register not being found.
 fn get_register_by_name(
     dev: &mut ModbusDeviceAsync,
     name: &str,
@@ -34,12 +48,28 @@ fn get_register_by_name(
 }
 
 #[async_trait]
+/// This code snippet is implementing the `IndustrialDevice` trait for the `ModbusDeviceAsync` struct.
+/// By implementing this trait, the `ModbusDeviceAsync` struct gains the functionality defined by the
+/// trait methods.
 impl IndustrialDevice for ModbusDeviceAsync {
+    /// The `connect` function in Rust establishes a Modbus connection asynchronously
+    /// 
+    /// Returns:
+    /// 
+    /// a `Result` with either `Ok(())` if the connection is
+    /// successful or an `IndustrialDeviceError` if there is an error during the connection process.
     async fn connect(&mut self) -> Result<(), IndustrialDeviceError> {
         ModbusConnexionAsync::connect(self).await?;
         Ok(())
     }
 
+    /// The `dump_registers` function in Rust asynchronously retrieves input and holding registers,
+    /// converts them into a HashMap of values, and returns the combined result.
+    /// 
+    /// Returns:
+    /// 
+    /// `Result` containing a `HashMap<String, Value>` if
+    /// successful, or an `IndustrialDeviceError` if an error occurs during the process.
     async fn dump_registers(&mut self) -> Result<HashMap<String, Value>, IndustrialDeviceError> {
         let input: HashMap<String, RegisterValue> = self.dump_input_registers().await?;
         let holding: HashMap<String, RegisterValue> = self.dump_holding_registers().await?;
@@ -58,12 +88,32 @@ impl IndustrialDevice for ModbusDeviceAsync {
         Ok(res)
     }
 
+    /// The function `read_register_by_name` reads a register value by its name asynchronously in Rust.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `name`:  reference to a string which represents the name of the register you want to read.
+    /// 
+    /// Returns:
+    /// 
+    /// `Result` containing a `Value` or an IndustrialDeviceError`.
     async fn read_register_by_name(&mut self, name: &str) -> Result<Value, IndustrialDeviceError> {
         let (reg, table) = get_register_by_name(self, name)?;
         let val = self.read_register(&reg, &table).await?;
         Ok(val.into())
     }
 
+    /// The function `write_register_by_name` writes a value to a register by name asynchronously in
+    /// Rust.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `name`: The `name` parameter a reference to a string that represents the name of the register to write to.
+    /// * `value`: The `value` a reference to a `Value` type corresponding the value we want to write in the register.
+    /// 
+    /// Returns:
+    /// 
+    ///  a `Result<(), IndustrialDeviceError>`.
     async fn write_register_by_name(
         &mut self,
         name: &str,

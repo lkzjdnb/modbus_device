@@ -29,6 +29,23 @@ use crate::modbus_connexion_async::ModbusConnexionAsync;
 const MODBUS_MAX_READ_LEN: u16 = 125;
 
 #[derive(Debug)]
+/// The `ModbusDeviceAsync` struct represents a Modbus device with input and holding registers in Rust.
+/// 
+/// Properties:
+/// 
+/// * `ctx`: It is used to store the context information related to the Modbus device. The `Option` type allows this field to be either
+/// `Some(Context)` or `None`, providing flexibility in handling the presence or absence of the context
+/// information
+/// 
+/// * `input_registers`: A HashMap that stores input registers for the Modbus device.
+///  Each input register is identified by a unique String key and is associated with a `Register` struct.
+/// 
+/// * `holding_registers`: The `holding_registers` property in the `ModbusDeviceAsync` struct is a
+/// HashMap that stores holding registers for the Modbus device. Holding registers are used in Modbus
+/// communication to store data such as control values, setpoints, and other parameters that need to be
+/// read from or written to by.
+/// 
+/// * `device`:  the configuration related to a Modbus device.
 pub struct ModbusDeviceAsync {
     ctx: Option<Context>,
     input_registers: HashMap<String, Register>,
@@ -52,6 +69,15 @@ impl ModbusDeviceAsync {
 }
 
 impl ModbusConnexionAsync for ModbusDeviceAsync {
+    
+    /// The function `connect` establishes a connection to a Modbus device either over TCP or RTU
+    /// protocol in Rust, handling different contexts accordingly.
+    /// creation of the element to create the connextion and connect to it
+    /// Returns:
+    /// 
+    /// The `connect` function returns a `Result` enum with the possible outcomes being `Ok(())` if the
+    /// connection is successful or an `Err(ModbusError)` if an error occurs during the connection
+    /// process.
     async fn connect(&mut self) -> Result<(), ModbusError> {
         match &self.device {
             ModBusContext::TCP(ctx) => {
@@ -70,8 +96,20 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         }
         Ok(())
     }
-
-    // read input registers by address
+ 
+    /// This function reads input registers by address.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `addr`: The address of the Modbus register from which you want to start to read data.
+    /// * `nb`: The `nb` parameter in the `read_raw_registers` function represents the number of
+    /// registers to read starting from the specified address (`addr`).
+    /// * `source`: specifies whether to read from input registers or holding registers.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `read_raw_registers` returns a `Result` containing a vector of `u16` values if the
+    /// operation is successful, or a `ModbusError` if there is an error during the process.
     async fn read_raw_registers(
         &mut self,
         addr: &Address,
@@ -79,15 +117,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         source: &ModBusRegisters,
     ) -> Result<Vec<u16>, ModbusError> {
         debug!("read register {addr} x{nb}");
+        // transformation to Ok if there is a Value to ctx
         let ctx = self
             .ctx
             .as_mut()
-            .ok_or(ModbusError::DeviceNotConnectedError)?;
+            .ok_or(ModbusError::DeviceNotConnectedError)?;  
+        // recuperation of value
         let res = match source {
             ModBusRegisters::INPUT => ctx.read_input_registers(*addr, *nb),
             ModBusRegisters::HOLDING => ctx.read_holding_registers(*addr, *nb),
         }
         .await;
+        // see if there is any error
         match res {
             Ok(res) => match res {
                 Ok(res) => return Ok(res),
@@ -96,6 +137,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             Err(err) => return Err(err.into()),
         }
     }
+
+    /// This function writes input registers by address.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `addr`: The address of the Modbus register from which you want to write data.
+    /// * `data`: the value you want to write in the data
+    /// 
+    /// Returns:
+    /// 
+    /// The function `write_raw_holding_registers` returns a `Result` if the
+    /// operation is successful, or a `ModbusError` if there is an error during the process.
     async fn write_raw_holding_registers(
         &mut self,
         addr: &Address,
@@ -114,6 +167,20 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             Err(err) => return Err(err.into()),
         }
     }
+
+    /// The `read_range` function in Rust reads a range of Modbus registers, converts the data types,
+    /// and returns a HashMap of register values.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `regs`: the list of regiister need to be read
+    /// * `source`: specifies whether to read from input registers or holding registers.
+    /// 
+    /// Returns:
+    /// 
+    /// The `read_range` function returns a `Result` containing a `HashMap<String, RegisterValue>` or a
+    /// `ModbusError`. The `HashMap` contains the converted values associated with the registers
+    /// specified in the input `regs` slice.
     async fn read_range(
         &mut self,
         regs: &[Register],
@@ -121,13 +188,14 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
         let s_reg = regs.first().unwrap();
         let e_reg = regs.last().unwrap();
-        // Read the values
 
+        // definition between the start register and the end register
         let start_address = s_reg.addr;
         let read_len = e_reg.addr + e_reg.len - s_reg.addr;
 
         debug!("reading range {0}:{1}", start_address, read_len);
 
+        // get the data
         let read_regs: Vec<u16> = self
             .read_raw_registers(&start_address, &read_len, source)
             .await?;
@@ -153,6 +221,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
             .collect())
     }
 
+    /// The function `read_registers` reads a list of registers in order of address and returns a
+    /// hashmap of register values.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `regs`: the list of register need to be read
+    /// * `source`: specifies whether to read from input registers or holding registers.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `read_registers` returns a `Result` containing a `HashMap<String, RegisterValue>`
+    /// on success or a `ModbusError` on failure.
     async fn read_registers(
         &mut self,
         regs: &[Register],
@@ -167,7 +247,7 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         let mut reg_range_end = 0;
 
         let mut result: HashMap<String, RegisterValue> = HashMap::new();
-
+        
         if sorted_regs.len() == 0 {
             debug!("There is no register to read");
             return Ok(HashMap::new());
@@ -204,6 +284,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
 
         return Ok(result);
     }
+
+    /// The `read_register` function in Rust reads a register value from a Modbus source asynchronously.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `reg`:  the register to be read.
+    /// * `source`: the device source from which the register value should be read.
+    /// 
+    /// Returns:
+    /// 
+    /// The `read_register` function returns a `Result` containing a `RegisterValue` if successful, or a
+    /// `ModbusError` if an error occurs.
     async fn read_register(
         &mut self,
         reg: &Register,
@@ -215,6 +307,20 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
 
         Ok(val.clone())
     }
+
+    /// This Rust function reads registers by name from a Modbus source and returns a HashMap of
+    /// register values.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `reg`:  the register's name to be read.
+    /// * `source`: the device source from which the register value should be read.
+    /// 
+    /// Returns:
+    /// 
+    /// The `read_registers_by_name` function returns a `Result` containing a `HashMap` with keys of
+    /// type `std::string::String` and values of type `RegisterValue`, or a `ModbusError` if an error
+    /// occurs during the operation.
     async fn read_registers_by_name(
         &mut self,
         names: &[String],
@@ -236,6 +342,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
 
         self.read_registers(&registers_to_read, source).await
     }
+
+    /// The `dump_registers` function in Rust asynchronously reads and returns filtered register values
+    /// based on the source ModBusRegisters type.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `source`: specifies whether to read from input registers or holding registers.
+    /// 
+    /// Returns:
+    /// 
+    /// The `dump_registers` function returns a `Result` containing a `HashMap<String, RegisterValue>`
+    /// on success or a `ModbusError` on failure.
     async fn dump_registers(
         &mut self,
         source: &ModBusRegisters,
@@ -257,6 +375,21 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         self.read_registers(&filtered_regs, source).await
     }
 
+
+
+
+
+    /// The function `read_input_registers_by_name` reads input registers by name in Rust
+    /// asynchronously.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `names`: list of names of the registers to read.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `read_input_registers_by_name` is returning a `Result` containing a
+    /// `HashMap<String, RegisterValue>` on success or a `ModbusError` on failure.
     async fn read_input_registers_by_name(
         &mut self,
         names: &[String],
@@ -264,18 +397,51 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         self.read_registers_by_name(names, &ModBusRegisters::INPUT)
             .await
     }
+
+    /// The function `read_input_registers` reads input registers asynchronously and returns a HashMap
+    /// of register values.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `regs`: the registers to be read from the Modbus device.
+    /// 
+    /// Returns:
+    /// 
+    /// This function `read_input_registers` is returning a `Result` containing a `HashMap` with keys of
+    /// type `String` and values of type `RegisterValue`, or a `ModbusError` if an error occurs during
+    /// the operation.
     async fn read_input_registers(
         &mut self,
         regs: &[Register],
     ) -> Result<HashMap<std::string::String, RegisterValue>, ModbusError> {
         self.read_registers(regs, &ModBusRegisters::INPUT).await
     }
+
+    /// The `dump_input_registers` function dumps input registers and returns a
+    /// HashMap of register values or a ModbusError.
+    /// 
+    /// Returns:
+    /// 
+    /// The `dump_input_registers` function is returning a `Result` containing a `HashMap` with keys of
+    /// type `String` and values of type `RegisterValue`, or a `ModbusError` if an error occurs during
+    /// the operation.
     async fn dump_input_registers(
         &mut self,
     ) -> Result<HashMap<std::string::String, RegisterValue>, ModbusError> {
         self.dump_registers(&ModBusRegisters::INPUT).await
     }
 
+    /// The function `read_holding_registers_by_name` reads holding registers by name i
+    /// 
+    /// Arguments:
+    /// 
+    /// * `names`: list of names of the registers to read.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `read_holding_registers_by_name` is returning a `Result` containing a
+    /// `HashMap<String, RegisterValue>` on success or a `ModbusError` on failure.
+    /// the operation.
     async fn read_holding_registers_by_name(
         &mut self,
         names: &[String],
@@ -283,23 +449,66 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         self.read_registers_by_name(names, &ModBusRegisters::HOLDING)
             .await
     }
+    /// The function `read_holding_registers` reads holding registers and returns a HashMap
+    /// of register values.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `regs`: list of the registers to read.
+    /// 
+    /// Returns:
+    /// 
+    /// This function `read_holding_registers` is returning a `Result` containing a `HashMap` with keys of
+    /// type `String` and values of type `RegisterValue`, or a `ModbusError` if an error occurs during
+    /// the operation.
     async fn read_holding_registers(
         &mut self,
         regs: &[Register],
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
         self.read_registers(regs, &ModBusRegisters::HOLDING).await
     }
+
+    /// The function `read_holding_register` reads a holding register asynchronously
+    /// 
+    /// Arguments:
+    /// 
+    /// * `reg`: list of the registers to read.
+    /// 
+    /// Returns:
+    /// 
+    /// The `read_holding_register` function is returning a `Result` enum with either a `RegisterValue`
+    /// on success or a `ModbusError` on failure.
     async fn read_holding_register(
         &mut self,
         reg: &Register,
     ) -> Result<RegisterValue, ModbusError> {
         self.read_register(reg, &ModBusRegisters::HOLDING).await
     }
+
+    /// The `dump_holding_registers` function dumps holding registers and returns a
+    /// result containing a hashmap of register values or a Modbus error.
+    /// 
+    /// Returns:
+    /// 
+    /// This function is returning a `Result` containing a `HashMap` with keys of type `String` and
+    /// values of type `RegisterValue`, or a `ModbusError` if an error occurs.
     async fn dump_holding_registers(
         &mut self,
     ) -> Result<HashMap<String, RegisterValue>, ModbusError> {
         self.dump_registers(&ModBusRegisters::HOLDING).await
     }
+
+    /// The function `write_holding_register` writes a value to a holding register in a Modbus device.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `reg`:  the register to be write.
+    /// * `val`: The `val` parameter represents the value that you want to write to the holding register
+    /// 
+    /// Returns:
+    /// 
+    /// The `write_holding_register` function returns a `Result` enum with the success type `()` (an
+    /// empty tuple) and the error type `ModbusError`.
     async fn write_holding_register(
         &mut self,
         reg: &Register,
@@ -309,6 +518,18 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
 
         self.write_raw_holding_registers(&reg.addr, &data).await
     }
+
+    /// The function `write_holding_register` writes a value to a holding register in a Modbus device.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `name`:  the name of ther register to be write.
+    /// * `val`: The `val` parameter represents the value that you want to write to the holding register
+    /// 
+    /// Returns:
+    /// 
+    /// The `write_holding_register` function returns a `Result` enum with the success type `()` (an
+    /// empty tuple) and the error type `ModbusError`.
     async fn write_holding_register_by_name(
         &mut self,
         name: &str,
@@ -322,9 +543,32 @@ impl ModbusConnexionAsync for ModbusDeviceAsync {
         self.write_holding_register(&reg, val).await
     }
 
+    /// This function retrieves a holding register by its name from a data structure and returns it as
+    /// an optional value.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `name`: The `name` parameter represents the name of
+    /// the holding register you want to retrieve.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `get_holding_register_by_name` returns an `Option<Register>`.
     fn get_holding_register_by_name(&mut self, name: &str) -> Option<Register> {
         self.holding_registers.get(name).cloned()
     }
+
+    /// This function retrieves a input register by its name from a data structure and returns it as
+    /// an optional value.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `name`: The `name` parameter represents the name of
+    /// the input register you want to retrieve.
+    /// 
+    /// Returns:
+    /// 
+    /// The function `get_input_register_by_name` returns an `Option<Register>`
     fn get_input_register_by_name(&mut self, name: &str) -> Option<Register> {
         self.input_registers.get(name).cloned()
     }

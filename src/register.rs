@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 #[derive(Debug, Copy, Clone)]
+
 pub enum DataType {
     UInt16,
     UInt32,
@@ -14,6 +15,22 @@ pub enum DataType {
 }
 
 #[derive(Clone)]
+/// The `Register` struct in Rust represents the structure of a register with a name, address, length, data type, and
+/// read flag.
+/// 
+/// Properties:
+/// 
+/// * `name`: the name of the register.
+/// 
+/// * `addr`: the address of the register, typically a 16-bit unsigned integer (u16) indicating the memory location where the register is
+/// located.
+/// 
+/// * `len`: the length of the register data in
+/// 16-bit units. This means that if `len` is 2, for example, the register data will be 32 bits long (2 x 16 bits).
+/// 
+/// * `data_type`: the type of data that the register holds.
+/// 
+/// * `read`:  boolean value that indicates whether the register is readable only or not
 pub struct Register {
     pub name: String,
     pub addr: u16,
